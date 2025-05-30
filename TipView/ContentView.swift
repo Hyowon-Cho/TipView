@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct ContentView: View {
+    // MARK: - Appearance setting stored in UserDefaults
+    @AppStorage("isDarkMode") private var isDarkMode = false
+
     @State private var amount: String = ""
     @State private var tipPercent: Double = 15
     @State private var numberOfPeople: Int = 2
@@ -10,6 +13,7 @@ struct ContentView: View {
 
     @State private var history: [String] = []
 
+    // Quotes split into (text, author)
     let quotes: [(text: String, author: String)] = [
         ("It is better to be alone than in bad company.", "George Washington"),
         ("The only true wisdom is in knowing you know nothing.", "Socrates"),
@@ -24,22 +28,25 @@ struct ContentView: View {
 
     let historyKey = "TipHistory"
 
+    // Calculate tip
     var tipAmount: Double {
         let bill = Double(amount) ?? 0
         return bill * tipPercent / 100
     }
 
+    // Calculate total
     var totalAmount: Double {
         let bill = Double(amount) ?? 0
         return bill + tipAmount
     }
 
+    // Calculate per person values
     var tipPerPerson: Double {
-        return tipAmount / Double(numberOfPeople)
+        tipAmount / Double(numberOfPeople)
     }
 
     var totalPerPerson: Double {
-        return totalAmount / Double(numberOfPeople)
+        totalAmount / Double(numberOfPeople)
     }
 
     var body: some View {
@@ -83,6 +90,11 @@ struct ContentView: View {
                     Text("Total per person: $\(totalPerPerson, specifier: "%.2f")")
                 }
 
+                // Appearance toggle
+                Section(header: Text("Appearance")) {
+                    Toggle("Dark Mode", isOn: $isDarkMode)
+                }
+
                 // Quote of the day
                 Section(header: Text("💬 Quote of the Day")) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -110,6 +122,7 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("TipView")
+            .preferredColorScheme(isDarkMode ? .dark : .light)
             .onAppear {
                 loadHistory()
                 let quote = quotes.randomElement()!
