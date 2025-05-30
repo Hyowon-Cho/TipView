@@ -109,7 +109,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .navigationTitle("Tip Calculator")
+            .navigationTitle("TipView")
             .onAppear {
                 loadHistory()
                 let quote = quotes.randomElement()!
