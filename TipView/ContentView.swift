@@ -3,14 +3,13 @@ import SwiftUI
 struct ContentView: View {
     @State private var amount: String = ""
     @State private var tipPercent: Double = 15
-    
-    // Split quote into text + author
+    @State private var numberOfPeople: Int = 2
+
     @State private var randomQuoteText: String = ""
     @State private var randomQuoteAuthor: String = ""
 
-    @State private var history: [String] = []  // Save calculation history
+    @State private var history: [String] = []
 
-    // Quotes split into (text, author)
     let quotes: [(text: String, author: String)] = [
         ("It is better to be alone than in bad company.", "George Washington"),
         ("The only true wisdom is in knowing you know nothing.", "Socrates"),
@@ -23,41 +22,52 @@ struct ContentView: View {
         ("Do not pray for easy lives. Pray to be stronger men.", "John F. Kennedy")
     ]
 
-    // Key for UserDefaults
     let historyKey = "TipHistory"
 
-    // Calculate tip
     var tipAmount: Double {
-        let value = Double(amount) ?? 0
-        return value * tipPercent / 100
+        let bill = Double(amount) ?? 0
+        return bill * tipPercent / 100
     }
 
-    // Calculate total
     var totalAmount: Double {
-        let value = Double(amount) ?? 0
-        return value + tipAmount
+        let bill = Double(amount) ?? 0
+        return bill + tipAmount
+    }
+
+    var tipPerPerson: Double {
+        return tipAmount / Double(numberOfPeople)
+    }
+
+    var totalPerPerson: Double {
+        return totalAmount / Double(numberOfPeople)
     }
 
     var body: some View {
         NavigationView {
             Form {
-                // Amount input section
+                // Amount input
                 Section(header: Text("Enter Amount")) {
                     TextField("$", text: $amount)
                         .keyboardType(.decimalPad)
                 }
 
-                // Tip percentage slider
+                // Tip slider
                 Section(header: Text("Tip Percentage")) {
                     VStack(alignment: .leading) {
                         Slider(value: $tipPercent, in: 5...30, step: 1)
                         Text("Tip: \(Int(tipPercent))%")
                             .foregroundColor(.gray)
                     }
-                    .padding(.vertical, 5)
                 }
 
-                // Calculation result + save button
+                // Number of people
+                Section(header: Text("Number of People")) {
+                    Stepper(value: $numberOfPeople, in: 1...20) {
+                        Text("\(numberOfPeople) \(numberOfPeople == 1 ? "person" : "people")")
+                    }
+                }
+
+                // Tip + total + save
                 Section(header: Text("Calculation")) {
                     Text("Tip: $\(tipAmount, specifier: "%.2f")")
                     Text("Total: $\(totalAmount, specifier: "%.2f")")
@@ -67,7 +77,13 @@ struct ContentView: View {
                     }
                 }
 
-                // Random quote (two-line layout)
+                // Split result
+                Section(header: Text("Split Result")) {
+                    Text("Tip per person: $\(tipPerPerson, specifier: "%.2f")")
+                    Text("Total per person: $\(totalPerPerson, specifier: "%.2f")")
+                }
+
+                // Quote of the day
                 Section(header: Text("💬 Quote of the Day")) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\"\(randomQuoteText)\"")
@@ -79,38 +95,48 @@ struct ContentView: View {
                     }
                 }
 
-                // Saved history
+                // History + clear button
                 if !history.isEmpty {
                     Section(header: Text("🧾 Recent History")) {
                         ForEach(history.reversed(), id: \.self) { entry in
                             Text(entry)
                         }
+
+                        Button("Clear History") {
+                            clearHistory()
+                        }
+                        .foregroundColor(.red)
                     }
                 }
             }
-            .navigationTitle("TipView")
+            .navigationTitle("Tip Calculator")
             .onAppear {
-                let selected = quotes.randomElement()!
-                randomQuoteText = selected.text
-                randomQuoteAuthor = selected.author
                 loadHistory()
+                let quote = quotes.randomElement()!
+                randomQuoteText = quote.text
+                randomQuoteAuthor = quote.author
             }
         }
     }
 
-    // Save current calculation to history
+    // Save calculation record
     func saveRecord() {
         guard let bill = Double(amount), bill > 0 else { return }
         let entry = String(format: "$%.2f + %d%% = $%.2f", bill, Int(tipPercent), totalAmount)
-
         history.append(entry)
         UserDefaults.standard.set(history, forKey: historyKey)
     }
 
-    // Load saved history from UserDefaults
+    // Load saved history
     func loadHistory() {
         if let saved = UserDefaults.standard.stringArray(forKey: historyKey) {
             history = saved
         }
+    }
+
+    // Clear all saved history
+    func clearHistory() {
+        history.removeAll()
+        UserDefaults.standard.removeObject(forKey: historyKey)
     }
 }
