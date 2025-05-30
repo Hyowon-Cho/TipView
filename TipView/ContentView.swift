@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    // MARK: - Appearance setting stored in UserDefaults
+    // Store dark mode preference
     @AppStorage("isDarkMode") private var isDarkMode = false
 
     @State private var amount: String = ""
@@ -58,7 +58,7 @@ struct ContentView: View {
                         .keyboardType(.decimalPad)
                 }
 
-                // Tip slider
+                // Tip percentage slider
                 Section(header: Text("Tip Percentage")) {
                     VStack(alignment: .leading) {
                         Slider(value: $tipPercent, in: 5...30, step: 1)
@@ -90,11 +90,6 @@ struct ContentView: View {
                     Text("Total per person: $\(totalPerPerson, specifier: "%.2f")")
                 }
 
-                // Appearance toggle
-                Section(header: Text("Appearance")) {
-                    Toggle("Dark Mode", isOn: $isDarkMode)
-                }
-
                 // Quote of the day
                 Section(header: Text("💬 Quote of the Day")) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -122,6 +117,15 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("TipView")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        isDarkMode.toggle()
+                    }) {
+                        Image(systemName: isDarkMode ? "sun.max.fill" : "moon.fill")
+                    }
+                }
+            }
             .preferredColorScheme(isDarkMode ? .dark : .light)
             .onAppear {
                 loadHistory()
