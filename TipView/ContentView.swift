@@ -3,20 +3,24 @@ import SwiftUI
 struct ContentView: View {
     @State private var amount: String = ""
     @State private var tipPercent: Double = 15
-    @State private var randomQuote: String = ""
+    
+    // Split quote into text + author
+    @State private var randomQuoteText: String = ""
+    @State private var randomQuoteAuthor: String = ""
+
     @State private var history: [String] = []  // Save calculation history
 
-    // Famous quotes to display randomly
-    let quotes = [
-        "It is better to be alone than in bad company. – George Washington",
-        "The only true wisdom is in knowing you know nothing. – Socrates",
-        "Life is like riding a bicycle. To keep your balance, you must keep moving. – Albert Einstein",
-        "I have a dream. – Martin Luther King Jr.",
-        "Whatever you are, be a good one. – Abraham Lincoln",
-        "Success is not final, failure is not fatal: it is the courage to continue that counts. – Winston Churchill",
-        "The future belongs to those who believe in the beauty of their dreams. – Eleanor Roosevelt",
-        "Injustice anywhere is a threat to justice everywhere. – Martin Luther King Jr.",
-        "Do not pray for easy lives. Pray to be stronger men. – John F. Kennedy"
+    // Quotes split into (text, author)
+    let quotes: [(text: String, author: String)] = [
+        ("It is better to be alone than in bad company.", "George Washington"),
+        ("The only true wisdom is in knowing you know nothing.", "Socrates"),
+        ("Life is like riding a bicycle. To keep your balance, you must keep moving.", "Albert Einstein"),
+        ("I have a dream.", "Martin Luther King Jr."),
+        ("Whatever you are, be a good one.", "Abraham Lincoln"),
+        ("Success is not final, failure is not fatal: it is the courage to continue that counts.", "Winston Churchill"),
+        ("The future belongs to those who believe in the beauty of their dreams.", "Eleanor Roosevelt"),
+        ("Injustice anywhere is a threat to justice everywhere.", "Martin Luther King Jr."),
+        ("Do not pray for easy lives. Pray to be stronger men.", "John F. Kennedy")
     ]
 
     // Key for UserDefaults
@@ -57,17 +61,22 @@ struct ContentView: View {
                 Section(header: Text("Calculation")) {
                     Text("Tip: $\(tipAmount, specifier: "%.2f")")
                     Text("Total: $\(totalAmount, specifier: "%.2f")")
-                    
+
                     Button("Save Record") {
                         saveRecord()
                     }
                 }
 
-                // Random quote
+                // Random quote (two-line layout)
                 Section(header: Text("💬 Quote of the Day")) {
-                    Text(randomQuote)
-                        .foregroundColor(.gray)
-                        .italic()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\"\(randomQuoteText)\"")
+                            .italic()
+                            .foregroundColor(.gray)
+                        Text("– \(randomQuoteAuthor)")
+                            .foregroundColor(.gray)
+                            .font(.subheadline)
+                    }
                 }
 
                 // Saved history
@@ -81,7 +90,9 @@ struct ContentView: View {
             }
             .navigationTitle("TipView")
             .onAppear {
-                randomQuote = quotes.randomElement() ?? ""
+                let selected = quotes.randomElement()!
+                randomQuoteText = selected.text
+                randomQuoteAuthor = selected.author
                 loadHistory()
             }
         }
@@ -95,6 +106,7 @@ struct ContentView: View {
         history.append(entry)
         UserDefaults.standard.set(history, forKey: historyKey)
     }
+
     // Load saved history from UserDefaults
     func loadHistory() {
         if let saved = UserDefaults.standard.stringArray(forKey: historyKey) {
