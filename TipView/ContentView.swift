@@ -4,6 +4,7 @@ struct ContentView: View {
     @State private var amount: String = ""
     @State private var tipPercent: Double = 15
     @State private var randomQuote: String = ""
+    @State private var history: [String] = []  // Save calculation history
 
     // Famous quotes to display randomly
     let quotes = [
@@ -18,11 +19,16 @@ struct ContentView: View {
         "Do not pray for easy lives. Pray to be stronger men. – John F. Kennedy"
     ]
 
+    // Key for UserDefaults
+    let historyKey = "TipHistory"
+
+    // Calculate tip
     var tipAmount: Double {
         let value = Double(amount) ?? 0
         return value * tipPercent / 100
     }
 
+    // Calculate total
     var totalAmount: Double {
         let value = Double(amount) ?? 0
         return value + tipAmount
@@ -47,10 +53,14 @@ struct ContentView: View {
                     .padding(.vertical, 5)
                 }
 
-                // Calculation result
+                // Calculation result + save button
                 Section(header: Text("Calculation")) {
                     Text("Tip: $\(tipAmount, specifier: "%.2f")")
                     Text("Total: $\(totalAmount, specifier: "%.2f")")
+                    
+                    Button("Save Record") {
+                        saveRecord()
+                    }
                 }
 
                 // Random quote
@@ -59,11 +69,36 @@ struct ContentView: View {
                         .foregroundColor(.gray)
                         .italic()
                 }
+
+                // Saved history
+                if !history.isEmpty {
+                    Section(header: Text("🧾 Recent History")) {
+                        ForEach(history.reversed(), id: \.self) { entry in
+                            Text(entry)
+                        }
+                    }
+                }
             }
-            .navigationTitle("Tip Calculator")
+            .navigationTitle("TipView")
             .onAppear {
                 randomQuote = quotes.randomElement() ?? ""
+                loadHistory()
             }
+        }
+    }
+
+    // Save current calculation to history
+    func saveRecord() {
+        guard let bill = Double(amount), bill > 0 else { return }
+        let entry = String(format: "$%.2f + %d%% = $%.2f", bill, Int(tipPercent), totalAmount)
+
+        history.append(entry)
+        UserDefaults.standard.set(history, forKey: historyKey)
+    }
+    // Load saved history from UserDefaults
+    func loadHistory() {
+        if let saved = UserDefaults.standard.stringArray(forKey: historyKey) {
+            history = saved
         }
     }
 }
