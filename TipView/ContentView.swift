@@ -4,14 +4,21 @@ struct ContentView: View {
     // Store dark mode preference
     @AppStorage("isDarkMode") private var isDarkMode = false
 
+    // Input states
     @State private var amount: String = ""
     @State private var tipPercent: Double = 15
     @State private var numberOfPeople: Int = 2
 
+    // Quote states
     @State private var randomQuoteText: String = ""
     @State private var randomQuoteAuthor: String = ""
 
+    // History of calculations
     @State private var history: [String] = []
+
+    // Alert states for input validation
+    @State private var showAlert: Bool = false
+    @State private var alertMessage: String = ""
 
     // Quotes split into (text, author)
     let quotes: [(text: String, author: String)] = [
@@ -30,23 +37,27 @@ struct ContentView: View {
 
     // Calculate tip
     var tipAmount: Double {
-        let bill = Double(amount) ?? 0
+        let bill = Double(amount) ?? -1
+        guard bill > 0 else { return 0 }
         return bill * tipPercent / 100
     }
 
     // Calculate total
     var totalAmount: Double {
-        let bill = Double(amount) ?? 0
+        let bill = Double(amount) ?? -1
+        guard bill > 0 else { return 0 }
         return bill + tipAmount
     }
 
     // Calculate per person values
     var tipPerPerson: Double {
-        tipAmount / Double(numberOfPeople)
+        guard numberOfPeople > 0 else { return 0 }
+        return tipAmount / Double(numberOfPeople)
     }
 
     var totalPerPerson: Double {
-        totalAmount / Double(numberOfPeople)
+        guard numberOfPeople > 0 else { return 0 }
+        return totalAmount / Double(numberOfPeople)
     }
 
     var body: some View {
@@ -54,7 +65,7 @@ struct ContentView: View {
             Form {
                 // Amount input
                 Section(header: Text("Enter Amount")) {
-                    TextField("$", text: $amount)
+                    TextField("Enter total bill", text: $amount)
                         .keyboardType(.decimalPad)
                 }
 
@@ -127,6 +138,13 @@ struct ContentView: View {
                 }
             }
             .preferredColorScheme(isDarkMode ? .dark : .light)
+            .alert(isPresented: $showAlert) {
+                Alert(
+                    title: Text("Invalid Input"),
+                    message: Text(alertMessage),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
             .onAppear {
                 loadHistory()
                 let quote = quotes.randomElement()!
@@ -136,9 +154,18 @@ struct ContentView: View {
         }
     }
 
-    // Save calculation record
+    // Save calculation record with validation
     func saveRecord() {
-        guard let bill = Double(amount), bill > 0 else { return }
+        guard !amount.trimmingCharacters(in: .whitespaces).isEmpty else {
+            alertMessage = "Please enter a bill amount."
+            showAlert = true
+            return
+        }
+        guard let bill = Double(amount), bill > 0 else {
+            alertMessage = "Enter a valid number greater than 0."
+            showAlert = true
+            return
+        }
         let entry = String(format: "$%.2f + %d%% = $%.2f", bill, Int(tipPercent), totalAmount)
         history.append(entry)
         UserDefaults.standard.set(history, forKey: historyKey)
