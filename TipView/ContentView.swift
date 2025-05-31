@@ -1,4 +1,20 @@
 import SwiftUI
+import Charts
+
+// Model for storing each tip record with category
+struct TipRecord: Identifiable, Codable {
+    let id: UUID
+    let bill: Double
+    let tip: Double
+    let category: String
+    let date: Date
+}
+
+struct CategoryData: Identifiable {
+    let id = UUID()
+    let category: String
+    let total: Double
+}
 
 struct ContentView: View {
     // Store dark mode preference
@@ -8,19 +24,18 @@ struct ContentView: View {
     @State private var amount: String = ""
     @State private var tipPercent: Double = 15
     @State private var numberOfPeople: Int = 2
+    @State private var selectedCategory: String = "Delivery"
 
     // Quote states
     @State private var randomQuoteText: String = ""
     @State private var randomQuoteAuthor: String = ""
 
-    // History of calculations
-    @State private var history: [String] = []
+    // Records stored
+    @State private var records: [TipRecord] = []
 
-    // Alert states for input validation
-    @State private var showAlert: Bool = false
-    @State private var alertMessage: String = ""
+    // Categories list
+    let categories = ["Delivery", "Fine Dining", "Sushi", "Meat", "Other"]
 
-    // Quotes split into (text, author)
     let quotes: [(text: String, author: String)] = [
         ("It is better to be alone than in bad company.", "George Washington"),
         ("The only true wisdom is in knowing you know nothing.", "Socrates"),
@@ -33,23 +48,25 @@ struct ContentView: View {
         ("Do not pray for easy lives. Pray to be stronger men.", "John F. Kennedy")
     ]
 
-    let historyKey = "TipHistory"
+    let recordsKey = "TipRecords"
 
-    // Calculate tip
+    // Alert states for input validation
+    @State private var showAlert: Bool = false
+    @State private var alertMessage: String = ""
+
+    // Computed properties for calculations
     var tipAmount: Double {
         let bill = Double(amount) ?? -1
         guard bill > 0 else { return 0 }
         return bill * tipPercent / 100
     }
 
-    // Calculate total
     var totalAmount: Double {
         let bill = Double(amount) ?? -1
         guard bill > 0 else { return 0 }
         return bill + tipAmount
     }
 
-    // Calculate per person values
     var tipPerPerson: Double {
         guard numberOfPeople > 0 else { return 0 }
         return tipAmount / Double(numberOfPeople)
@@ -60,6 +77,33 @@ struct ContentView: View {
         return totalAmount / Double(numberOfPeople)
     }
 
+    // Extract tip values for recent chart
+    var tipValues: [Double] {
+        records.map { $0.tip }
+    }
+
+    // Aggregate tip totals by category
+    var categoryTotals: [String: Double] {
+        var dict: [String: Double] = [:]
+        for record in records {
+            dict[record.category, default: 0] += record.tip
+        }
+        return dict
+    }
+
+    // Determine top category by total tip
+    var topCategory: String {
+        if let (cat, _) = categoryTotals.max(by: { $0.value < $1.value }) {
+            return cat
+        }
+        return "None"
+    }
+
+    // Convert categoryTotals into array for chart
+    var categoryDataArray: [CategoryData] {
+        categoryTotals.map { CategoryData(category: $0.key, total: $0.value) }
+    }
+
     var body: some View {
         NavigationView {
             Form {
@@ -67,6 +111,16 @@ struct ContentView: View {
                 Section(header: Text("Enter Amount")) {
                     TextField("Enter total bill", text: $amount)
                         .keyboardType(.decimalPad)
+                }
+
+                // Category picker
+                Section(header: Text("Category")) {
+                    Picker("Category", selection: $selectedCategory) {
+                        ForEach(categories, id: \.self) { cat in
+                            Text(cat)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
                 }
 
                 // Tip percentage slider
@@ -113,13 +167,49 @@ struct ContentView: View {
                     }
                 }
 
-                // History + clear button
-                if !history.isEmpty {
-                    Section(header: Text("🧾 Recent History")) {
-                        ForEach(history.reversed(), id: \.self) { entry in
-                            Text(entry)
+                // Recent tip amounts chart
+                if !tipValues.isEmpty {
+                    Section(header: Text("📊 Recent Tips")) {
+                        Chart {
+                            ForEach(Array(tipValues.enumerated()), id: \.offset) { index, value in
+                                BarMark(
+                                    x: .value("Entry", index + 1),
+                                    y: .value("Tip Amount", value)
+                                )
+                            }
                         }
+                        .frame(height: 200)
+                    }
+                }
 
+                // Category totals chart & top category
+                if !categoryDataArray.isEmpty {
+                    Section(header: Text("📈 Tips by Category")) {
+                        Chart {
+                            ForEach(categoryDataArray) { data in
+                                BarMark(
+                                    x: .value("Category", data.category),
+                                    y: .value("Total Tips", data.total)
+                                )
+                            }
+                        }
+                        .frame(height: 200)
+                        Text("Top Category: \(topCategory)")
+                            .font(.subheadline)
+                            .foregroundColor(.blue)
+                    }
+                }
+
+                // History + clear button
+                if !records.isEmpty {
+                    Section(header: Text("🧾 Recent History")) {
+                        ForEach(records.reversed()) { record in
+                            Text(String(format: "$%.2f + %d%% = $%.2f (%@)",
+                                         record.bill,
+                                         Int(tipPercent),
+                                         record.bill + record.tip,
+                                         record.category))
+                        }
                         Button("Clear History") {
                             clearHistory()
                         }
@@ -146,7 +236,7 @@ struct ContentView: View {
                 )
             }
             .onAppear {
-                loadHistory()
+                loadRecords()
                 let quote = quotes.randomElement()!
                 randomQuoteText = quote.text
                 randomQuoteAuthor = quote.author
@@ -154,7 +244,7 @@ struct ContentView: View {
         }
     }
 
-    // Save calculation record with validation
+    // Save calculation record with category
     func saveRecord() {
         guard !amount.trimmingCharacters(in: .whitespaces).isEmpty else {
             alertMessage = "Please enter a bill amount."
@@ -166,21 +256,28 @@ struct ContentView: View {
             showAlert = true
             return
         }
-        let entry = String(format: "$%.2f + %d%% = $%.2f", bill, Int(tipPercent), totalAmount)
-        history.append(entry)
-        UserDefaults.standard.set(history, forKey: historyKey)
+        let tipValue = bill * tipPercent / 100
+        let record = TipRecord(id: UUID(), bill: bill, tip: tipValue, category: selectedCategory, date: Date())
+        records.append(record)
+        saveRecordsToDefaults()
     }
 
-    // Load saved history
-    func loadHistory() {
-        if let saved = UserDefaults.standard.stringArray(forKey: historyKey) {
-            history = saved
+    // Persistence using UserDefaults
+    func saveRecordsToDefaults() {
+        if let encoded = try? JSONEncoder().encode(records) {
+            UserDefaults.standard.set(encoded, forKey: recordsKey)
         }
     }
 
-    // Clear all saved history
+    func loadRecords() {
+        if let data = UserDefaults.standard.data(forKey: recordsKey),
+           let decoded = try? JSONDecoder().decode([TipRecord].self, from: data) {
+            records = decoded
+        }
+    }
+
     func clearHistory() {
-        history.removeAll()
-        UserDefaults.standard.removeObject(forKey: historyKey)
+        records.removeAll()
+        UserDefaults.standard.removeObject(forKey: recordsKey)
     }
 }
