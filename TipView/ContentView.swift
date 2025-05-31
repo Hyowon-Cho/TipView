@@ -10,6 +10,7 @@ struct TipRecord: Identifiable, Codable {
     let date: Date
 }
 
+// Data structure for charting category totals
 struct CategoryData: Identifiable {
     let id = UUID()
     let category: String
@@ -26,33 +27,33 @@ struct ContentView: View {
     @State private var numberOfPeople: Int = 2
     @State private var selectedCategory: String = "Delivery"
 
-    // Quote states
-    @State private var randomQuoteText: String = ""
-    @State private var randomQuoteAuthor: String = ""
-
     // Records stored
     @State private var records: [TipRecord] = []
 
     // Categories list
-    let categories = ["Delivery", "Fine Dining", "Sushi", "Meat", "Other"]
-
-    let quotes: [(text: String, author: String)] = [
-        ("It is better to be alone than in bad company.", "George Washington"),
-        ("The only true wisdom is in knowing you know nothing.", "Socrates"),
-        ("Life is like riding a bicycle. To keep your balance, you must keep moving.", "Albert Einstein"),
-        ("I have a dream.", "Martin Luther King Jr."),
-        ("Whatever you are, be a good one.", "Abraham Lincoln"),
-        ("Success is not final, failure is not fatal: it is the courage to continue that counts.", "Winston Churchill"),
-        ("The future belongs to those who believe in the beauty of their dreams.", "Eleanor Roosevelt"),
-        ("Injustice anywhere is a threat to justice everywhere.", "Martin Luther King Jr."),
-        ("Do not pray for easy lives. Pray to be stronger men.", "John F. Kennedy")
+    let categories = [
+        "Delivery",
+        "Fine Dining",
+        "Sushi",
+        "Meat",
+        "Cafe",
+        "Fast Food",
+        "Bakery",
+        "Seafood",
+        "Vegetarian",
+        "Brunch",
+        "Bar",
+        "Buffet",
+        "Food Truck",
+        "Grocery",
+        "Other"
     ]
-
-    let recordsKey = "TipRecords"
 
     // Alert states for input validation
     @State private var showAlert: Bool = false
     @State private var alertMessage: String = ""
+
+    let recordsKey = "TipRecords"
 
     // Computed properties for calculations
     var tipAmount: Double {
@@ -77,11 +78,6 @@ struct ContentView: View {
         return totalAmount / Double(numberOfPeople)
     }
 
-    // Extract tip values for recent chart
-    var tipValues: [Double] {
-        records.map { $0.tip }
-    }
-
     // Aggregate tip totals by category
     var categoryTotals: [String: Double] {
         var dict: [String: Double] = [:]
@@ -89,14 +85,6 @@ struct ContentView: View {
             dict[record.category, default: 0] += record.tip
         }
         return dict
-    }
-
-    // Determine top category by total tip
-    var topCategory: String {
-        if let (cat, _) = categoryTotals.max(by: { $0.value < $1.value }) {
-            return cat
-        }
-        return "None"
     }
 
     // Convert categoryTotals into array for chart
@@ -107,13 +95,29 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             Form {
-                // Amount input
+                // 1. Enter Amount
                 Section(header: Text("Enter Amount")) {
                     TextField("Enter total bill", text: $amount)
                         .keyboardType(.decimalPad)
                 }
 
-                // Category picker
+                // 2. Tip Percentage
+                Section(header: Text("Tip Percentage")) {
+                    VStack(alignment: .leading) {
+                        Slider(value: $tipPercent, in: 5...30, step: 1)
+                        Text("Tip: \(Int(tipPercent))%")
+                            .foregroundColor(.gray)
+                    }
+                }
+
+                // 3. Number of People
+                Section(header: Text("Number of People")) {
+                    Stepper(value: $numberOfPeople, in: 1...20) {
+                        Text("\(numberOfPeople) \(numberOfPeople == 1 ? "person" : "people")")
+                    }
+                }
+
+                // 4. Category
                 Section(header: Text("Category")) {
                     Picker("Category", selection: $selectedCategory) {
                         ForEach(categories, id: \.self) { cat in
@@ -123,66 +127,22 @@ struct ContentView: View {
                     .pickerStyle(MenuPickerStyle())
                 }
 
-                // Tip percentage slider
-                Section(header: Text("Tip Percentage")) {
-                    VStack(alignment: .leading) {
-                        Slider(value: $tipPercent, in: 5...30, step: 1)
-                        Text("Tip: \(Int(tipPercent))%")
-                            .foregroundColor(.gray)
-                    }
-                }
-
-                // Number of people
-                Section(header: Text("Number of People")) {
-                    Stepper(value: $numberOfPeople, in: 1...20) {
-                        Text("\(numberOfPeople) \(numberOfPeople == 1 ? "person" : "people")")
-                    }
-                }
-
-                // Tip + total + save
+                // 5. Calculation
                 Section(header: Text("Calculation")) {
                     Text("Tip: $\(tipAmount, specifier: "%.2f")")
                     Text("Total: $\(totalAmount, specifier: "%.2f")")
-
                     Button("Save Record") {
                         saveRecord()
                     }
                 }
 
-                // Split result
+                // 6. Split Result
                 Section(header: Text("Split Result")) {
                     Text("Tip per person: $\(tipPerPerson, specifier: "%.2f")")
                     Text("Total per person: $\(totalPerPerson, specifier: "%.2f")")
                 }
 
-                // Quote of the day
-                Section(header: Text("💬 Quote of the Day")) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\"\(randomQuoteText)\"")
-                            .italic()
-                            .foregroundColor(.gray)
-                        Text("– \(randomQuoteAuthor)")
-                            .foregroundColor(.gray)
-                            .font(.subheadline)
-                    }
-                }
-
-                // Recent tip amounts chart
-                if !tipValues.isEmpty {
-                    Section(header: Text("📊 Recent Tips")) {
-                        Chart {
-                            ForEach(Array(tipValues.enumerated()), id: \.offset) { index, value in
-                                BarMark(
-                                    x: .value("Entry", index + 1),
-                                    y: .value("Tip Amount", value)
-                                )
-                            }
-                        }
-                        .frame(height: 200)
-                    }
-                }
-
-                // Category totals chart & top category
+                // 7. Tips by Category
                 if !categoryDataArray.isEmpty {
                     Section(header: Text("📈 Tips by Category")) {
                         Chart {
@@ -194,21 +154,20 @@ struct ContentView: View {
                             }
                         }
                         .frame(height: 200)
-                        Text("Top Category: \(topCategory)")
-                            .font(.subheadline)
-                            .foregroundColor(.blue)
                     }
                 }
 
-                // History + clear button
+                // 8. Recent History
                 if !records.isEmpty {
                     Section(header: Text("🧾 Recent History")) {
                         ForEach(records.reversed()) { record in
-                            Text(String(format: "$%.2f + %d%% = $%.2f (%@)",
-                                         record.bill,
-                                         Int(tipPercent),
-                                         record.bill + record.tip,
-                                         record.category))
+                            Text(String(
+                                format: "$%.2f + %d%% = $%.2f (%@)",
+                                record.bill,
+                                Int(tipPercent),
+                                record.bill + record.tip,
+                                record.category
+                            ))
                         }
                         Button("Clear History") {
                             clearHistory()
@@ -237,9 +196,6 @@ struct ContentView: View {
             }
             .onAppear {
                 loadRecords()
-                let quote = quotes.randomElement()!
-                randomQuoteText = quote.text
-                randomQuoteAuthor = quote.author
             }
         }
     }
