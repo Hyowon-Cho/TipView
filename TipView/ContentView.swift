@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import UserNotifications
 
 // Model for storing each tip record with category
 struct TipRecord: Identifiable, Codable {
@@ -18,19 +19,19 @@ struct CategoryData: Identifiable {
 }
 
 struct ContentView: View {
-    // Store dark mode preference
+    // MARK: – Dark Mode Preference
     @AppStorage("isDarkMode") private var isDarkMode = false
 
-    // Input states
+    // MARK: – Input States
     @State private var amount: String = ""
     @State private var tipPercent: Double = 15
     @State private var numberOfPeople: Int = 2
     @State private var selectedCategory: String = "Delivery"
 
-    // Records stored
+    // MARK: – Stored Records
     @State private var records: [TipRecord] = []
 
-    // Categories list
+    // MARK: – Categories List
     let categories = [
         "Delivery",
         "Fine Dining",
@@ -49,13 +50,13 @@ struct ContentView: View {
         "Other"
     ]
 
-    // Alert states for input validation
+    // MARK: – Alert States for Validation
     @State private var showAlert: Bool = false
     @State private var alertMessage: String = ""
 
     let recordsKey = "TipRecords"
 
-    // Computed properties for calculations
+    // MARK: – Computed Properties for Calculations
     var tipAmount: Double {
         let bill = Double(amount) ?? -1
         guard bill > 0 else { return 0 }
@@ -78,7 +79,7 @@ struct ContentView: View {
         return totalAmount / Double(numberOfPeople)
     }
 
-    // Aggregate tip totals by category
+    // MARK: – Aggregate Tip Totals by Category
     var categoryTotals: [String: Double] {
         var dict: [String: Double] = [:]
         for record in records {
@@ -87,10 +88,30 @@ struct ContentView: View {
         return dict
     }
 
-    // Convert categoryTotals into array for chart
+    // MARK: – Convert categoryTotals into Array for Chart
     var categoryDataArray: [CategoryData] {
         categoryTotals.map { CategoryData(category: $0.key, total: $0.value) }
     }
+
+    // MARK: – Compute Total Tip Used in the Past Week
+    var lastWeekTipSum: Double {
+        let calendar = Calendar.current
+        let now = Date()
+        guard let oneWeekAgo = calendar.date(byAdding: .day, value: -7, to: now) else {
+            return 0
+        }
+        return records
+            .filter { $0.date >= oneWeekAgo && $0.date <= now }
+            .reduce(0) { $0 + $1.tip }
+    }
+
+    // MARK: – Date Formatter for History Display
+    static let recordDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
 
     var body: some View {
         NavigationView {
@@ -162,9 +183,10 @@ struct ContentView: View {
                     Section(header: Text("🧾 Recent History")) {
                         ForEach(records.reversed()) { record in
                             Text(String(
-                                format: "$%.2f + %d%% = $%.2f (%@)",
+                                format: "%@ – $%.2f + $%.2f = $%.2f (%@)",
+                                ContentView.recordDateFormatter.string(from: record.date),
                                 record.bill,
-                                Int(tipPercent),
+                                record.tip,
                                 record.bill + record.tip,
                                 record.category
                             ))
@@ -196,11 +218,13 @@ struct ContentView: View {
             }
             .onAppear {
                 loadRecords()
+                requestNotificationPermission()
+                scheduleWeeklyTipReminder()
             }
         }
     }
 
-    // Save calculation record with category
+    // MARK: – Save calculation record with category
     func saveRecord() {
         guard !amount.trimmingCharacters(in: .whitespaces).isEmpty else {
             alertMessage = "Please enter a bill amount."
@@ -213,12 +237,18 @@ struct ContentView: View {
             return
         }
         let tipValue = bill * tipPercent / 100
-        let record = TipRecord(id: UUID(), bill: bill, tip: tipValue, category: selectedCategory, date: Date())
+        let record = TipRecord(
+            id: UUID(),
+            bill: bill,
+            tip: tipValue,
+            category: selectedCategory,
+            date: Date()
+        )
         records.append(record)
         saveRecordsToDefaults()
     }
 
-    // Persistence using UserDefaults
+    // MARK: – Persistence using UserDefaults
     func saveRecordsToDefaults() {
         if let encoded = try? JSONEncoder().encode(records) {
             UserDefaults.standard.set(encoded, forKey: recordsKey)
@@ -235,5 +265,37 @@ struct ContentView: View {
     func clearHistory() {
         records.removeAll()
         UserDefaults.standard.removeObject(forKey: recordsKey)
+    }
+
+    // MARK: – Request Notification Permission
+    func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            // Permission result handled silently
+        }
+    }
+
+    // MARK: – Schedule Weekly Tip Reminder (Every Sunday at 10 AM)
+    func scheduleWeeklyTipReminder() {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: ["weeklyTipReminder"])
+
+        let content = UNMutableNotificationContent()
+        content.title = "TipView Weekly Summary"
+        content.body = String(format: "Last week you spent $%.2f on tips.", lastWeekTipSum)
+        content.sound = .default
+
+        // Create date components for Sunday (weekday = 1) at 10:00 AM
+        var dateComponents = DateComponents()
+        dateComponents.weekday = 1      // Sunday in Calendar.current
+        dateComponents.hour = 10
+        dateComponents.minute = 0
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+        let request = UNNotificationRequest(
+            identifier: "weeklyTipReminder",
+            content: content,
+            trigger: trigger
+        )
+        center.add(request)
     }
 }
